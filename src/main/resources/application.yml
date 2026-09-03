@@ -1,0 +1,133 @@
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+spring:
+  application:
+    name: unified-document-viewer
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:docviewer}
+    username: ${DB_USER:docuser}
+    password: ${DB_PASS:docpassword}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 30000
+      connection-timeout: 5000
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        jdbc:
+          batch_size: 25
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8088/realms/dealership}
+          jwk-set-uri: ${JWKS_URI:http://localhost:8088/realms/dealership/protocol/openid-connect/certs}
+
+# External Systems Configuration (Open/Closed Architecture)
+external-systems:
+  cache-ttl-seconds: 60
+  cleanup-cron: "0 */5 * * * *"
+  systems:
+    sales:
+      enabled: true
+      source-name: SALES
+      base-url: ${SALES_API_URL:http://localhost:8081}
+      timeout-ms: 3000
+      token-uri: ${IDP_TOKEN_URL:http://localhost:8088/token}
+      client-id: unified-viewer-svc
+      client-secret: ${SALES_CLIENT_SECRET:sales-secret-key}
+      scope: sales:documents:read
+    service:
+      enabled: true
+      source-name: SERVICE
+      base-url: ${SERVICE_API_URL:http://localhost:8082}
+      timeout-ms: 3000
+      token-uri: ${IDP_TOKEN_URL:http://localhost:8088/token}
+      client-id: unified-viewer-svc
+      client-secret: ${SERVICE_CLIENT_SECRET:service-secret-key}
+      scope: service:documents:read
+
+# Resilience4j Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      sales:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        slowCallRateThreshold: 80
+        slowCallDurationThreshold: 2s
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        registerHealthIndicator: true
+      service:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        slowCallRateThreshold: 80
+        slowCallDurationThreshold: 2s
+        waitDurationInOpenState: 30s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        registerHealthIndicator: true
+  timelimiter:
+    instances:
+      sales:
+        timeoutDuration: 3s
+      service:
+        timeoutDuration: 3s
+  retry:
+    instances:
+      sales:
+        maxAttempts: 2
+        waitDuration: 500ms
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.reactive.function.client.WebClientException
+      service:
+        maxAttempts: 2
+        waitDuration: 500ms
+        retryExceptions:
+          - java.io.IOException
+          - org.springframework.web.reactive.function.client.WebClientException
+
+# Management & Observability
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        document.lookup.duration: true
+        external.api.call.duration: true
+
+# OpenAPI / Swagger
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operationsSorter: method

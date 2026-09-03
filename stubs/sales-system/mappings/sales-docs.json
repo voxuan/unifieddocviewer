@@ -1,0 +1,30 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/sales/documents",
+    "queryParameters": {
+      "vin": {
+        "equalTo": "1HGBH41JXMN109186"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": [
+      {
+        "documentId": "SAL-10042",
+        "type": "PURCHASE_ORDER",
+        "title": "Vehicle Purchase Order",
+        "createdAt": "2024-03-15T09:00:00Z",
+        "documentUrl": "https://storage.example.com/docs/SAL-10042.pdf?X-Signature=abc&X-Expires=1725360000",
+        "details": {
+          "amount": 35000,
+          "currency": "USD"
+        }
+      }
+    ]
+  }
+}

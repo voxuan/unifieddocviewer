@@ -1,0 +1,30 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/service/documents",
+    "queryParameters": {
+      "vin": {
+        "equalTo": "1HGBH41JXMN109186"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": [
+      {
+        "documentId": "SVC-88821",
+        "type": "SERVICE_RECORD",
+        "title": "60,000 Mile Service",
+        "createdAt": "2025-11-20T14:30:00Z",
+        "documentUrl": "https://storage.example.com/docs/SAL-10042.pdf?X-Signature=abc&X-Expires=1725360000",
+        "details": {
+          "technician": "J. Smith",
+          "mileage": 60142
+        }
+      }
+    ]
+  }
+}

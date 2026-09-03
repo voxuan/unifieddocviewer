@@ -1,0 +1,108 @@
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database (Cache & Audit Store)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: docviewer-postgres
+    environment:
+      POSTGRES_DB: docviewer
+      POSTGRES_USER: docuser
+      POSTGRES_PASSWORD: docpassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./stubs/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docuser -d docviewer"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - docviewer-net
+
+  # ---------------------------------------------------------------------------
+  # Mock Identity Provider (OIDC / OAuth2 & JWKS / Token endpoint)
+  # ---------------------------------------------------------------------------
+  idp-mock:
+    image: wiremock/wiremock:latest
+    container_name: docviewer-idp-mock
+    ports:
+      - "8088:8080"
+    volumes:
+      - ./stubs/idp-mock/mappings:/home/wiremock/mappings:ro
+      - ./stubs/idp-mock/__files:/home/wiremock/__files:ro
+    networks:
+      - docviewer-net
+
+  # ---------------------------------------------------------------------------
+  # Mock Sales System API
+  # ---------------------------------------------------------------------------
+  sales-stub:
+    image: wiremock/wiremock:latest
+    container_name: docviewer-sales-stub
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./stubs/sales-system/mappings:/home/wiremock/mappings:ro
+      - ./stubs/sales-system/__files:/home/wiremock/__files:ro
+    networks:
+      - docviewer-net
+
+  # ---------------------------------------------------------------------------
+  # Mock Service System API
+  # ---------------------------------------------------------------------------
+  service-stub:
+    image: wiremock/wiremock:latest
+    container_name: docviewer-service-stub
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./stubs/service-system/mappings:/home/wiremock/mappings:ro
+      - ./stubs/service-system/__files:/home/wiremock/__files:ro
+    networks:
+      - docviewer-net
+
+  # ---------------------------------------------------------------------------
+  # Unified Document Viewer Service (Spring Boot)
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: docviewer-app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: docviewer
+      DB_USER: docuser
+      DB_PASS: docpassword
+      SALES_API_URL: http://sales-stub:8080
+      SERVICE_API_URL: http://service-stub:8080
+      IDP_TOKEN_URL: http://idp-mock:8080/token
+      JWT_ISSUER_URI: http://idp-mock:8080/realms/dealership
+      JWKS_URI: http://idp-mock:8080/realms/dealership/protocol/openid-connect/certs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      sales-stub:
+        condition: service_started
+      service-stub:
+        condition: service_started
+      idp-mock:
+        condition: service_started
+    networks:
+      - docviewer-net
+    profiles:
+      - full-stack
+
+volumes:
+  postgres_data:
+
+networks:
+  docviewer-net:
+    driver: bridge

@@ -1,0 +1,24 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/realms/dealership/protocol/openid-connect/certs"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": {
+      "keys": [
+        {
+          "kid": "mock-key-1",
+          "kty": "RSA",
+          "alg": "RS256",
+          "use": "sig",
+          "n": "u1PSp7yV-8G...",
+          "e": "AQAB"
+        }
+      ]
+    }
+  }
+}
