@@ -30,6 +30,7 @@
 - [API Contract Reference](#api-contract-reference)
 - [Observability & Monitoring](#observability--monitoring)
 - [Extending to Additional External Systems](#extending-to-additional-external-systems)
+- [AI Collaboration Narrative](#ai-collaboration-narrative)
 - [Quick Commands & Agent Skills](#quick-commands--agent-skills)
 
 ---
@@ -667,6 +668,39 @@ The system is designed under the **Open/Closed Principle**. To add a 3rd or 4th 
          client-secret: ${FINANCE_CLIENT_SECRET}
          scope: finance:documents:read
    ```
+
+---
+
+## AI Collaboration Narrative
+
+### 1. How I guided the AI
+
+To maximize the AI's utility and prevent hallucinated or substandard patterns, I established a **context-driven, constraint-first prompting strategy**:
+
+- **Role & Standard Anchoring**: Assigned the AI the role of a Principal Distributed Systems Architect, requiring every proposal to adhere strictly to both core and non-functional requirements.
+
+- **Clear Objective & Direction**: Instructed the AI to seek clarification on ambiguities to prevent hallucinations, and ensured all AI proposals were reviewed and evaluated before moving to the next step.
+
+- **Constrain & Refine**: Introduced specific constraints to guide the AI toward optimal solutions (e.g., "use only layered architecture," "add circuit breakers," "handle edge cases").
+
+### 2. How I Verified and Refined the AI's Output
+
+I reviewed and tested all AI-generated suggestions before incorporating them into the project:
+
+- **Evaluating the Architecture**: Instructed the AI to use only a layered architecture rather than other patterns for implementing a simple application, making it easier to understand, test, and maintain.
+
+- **Adding Missing Components**:
+    - Prompted the AI to add a Circuit Breaker to prevent cascading failures when external systems go down.
+    - Required the AI to handle edge cases, such as providing partial responses to clients when external systems fail, rather than returning a hard error.
+
+- **Automating Testing**: Directed the AI to write test cases to verify system behavior instead of relying on manual testing, and asked it to create a script to execute the test suite automatically.
+
+### 3. How I Ensured Final Code Quality
+
+- **Automated Testing**: I added 13 unit and integration tests (`mvn clean test`) covering successful searches, partial failures, invalid VINs, and security checks.
+- **Testing Real Failure Scenarios**: I set up Docker Compose with WireMock to test slow responses, 500 errors, and circuit breaker trip conditions.
+- **Checking Thread Safety**: I reviewed the token caching logic to make sure there are no race conditions when multiple requests run concurrently.
+- **One-Click Test Script**: I created `scripts/test-runner.sh` so anyone can test and verify all scenarios with simple commands.
 
 ---
 

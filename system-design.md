@@ -798,3 +798,22 @@ Alerts are configured in **Prometheus Alertmanager** and routed to Slack or Page
 - **Token expiry**: 401 responses from external APIs trigger token cache invalidation and a single retry with a freshly fetched token.
 
 ---
+
+## GenAI Usage
+
+Generative AI was used throughout the system design phase as an interactive design partner and architectural reviewer.
+
+### 1. Architectural Exploration & Trade-off Analysis
+* **Concurrency Model**: Evaluated Spring WebFlux (reactive event loops) against Spring MVC with Java 21 Virtual Threads (Project Loom). The analysis favored Virtual Threads for its synchronous-style readability and simpler debugging while delivering equivalent high-concurrency I/O performance.
+* **Resilience Patterns**: Explored bulkhead isolation, circuit breakers, and rate limiters with Resilience4j to prevent cascade failures when upstream dealership systems experience outages.
+
+### 2. API Contract & Partial Failure Design
+* Designed the RESTful API contract for `GET /api/v1/documents?vin=...` including OpenAPI 3 schemas.
+* Formulated the partial-failure strategy: utilizing `206 Partial Content` with per-source status breakdowns when one external API fails, rather than failing the entire request.
+
+### 3. Database Caching & Indexing Strategy
+* Refined PostgreSQL schema design, adding composite indexes on `(vin, created_at DESC)` and JSONB metadata columns for low-latency cache retrieval and flexible document attributes.
+
+### 4. Security & Observability Validation
+* Structured the dual-layer JWT architecture (inbound RBAC with `ROLE_OPERATOR` and outbound client credentials caching).
+* Designed observability metrics (counters, latency histograms, circuit breaker gauges) and structured JSON logging with MDC correlation (`traceId`, `spanId`).
