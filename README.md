@@ -12,6 +12,7 @@
 
 ## Table of Contents
 
+- [⚡ Quick Start](#-quick-start)
 - [Features](#features)
 - [Architecture & Tech Stack](#architecture--tech-stack)
 - [Prerequisites](#prerequisites)
@@ -19,8 +20,9 @@
 - [Configuration](#configuration)
 - [Building the Application](#building-the-application)
 - [Running the Application](#running-the-application)
-  - [Method 1: One-Command Start (Docker Compose - Recommended)](#method-1-one-command-start-docker-compose---recommended)
-  - [Method 2: Local Development Mode](#method-2-local-development-mode)
+  - [Method 1: Automatic Zero-Config Startup (Recommended)](#method-1-automatic-zero-config-startup-recommended)
+  - [Method 2: Full-Stack Docker Compose](#method-2-full-stack-docker-compose)
+  - [Method 3: Local Development Mode](#method-3-local-development-mode)
 - [Testing Guide](#testing-guide)
   - [Automated Tests](#automated-tests)
   - [Manual API Testing with cURL](#manual-api-testing-with-curl)
@@ -32,6 +34,27 @@
 - [Extending to Additional External Systems](#extending-to-additional-external-systems)
 - [AI Collaboration Narrative](#ai-collaboration-narrative)
 - [Quick Commands & Agent Skills](#quick-commands--agent-skills)
+
+---
+
+## ⚡ Quick Start
+
+Get the entire application and all backing services up and running with zero configuration:
+
+```bash
+# 1. Start all services (auto-detects port conflicts, launches Docker + Spring Boot)
+./scripts/start-app.sh
+
+# 2. Run the automated end-to-end verification demo
+./scripts/test-runner.sh demo
+```
+
+> 💡 **Using an AI Assistant / IDE Agent?**  
+> You can also use natural language commands directly in your prompt:  
+> • `start app` $\rightarrow$ launches the environment.  
+> • `api docs` $\rightarrow$ views OpenAPI 3 schema.  
+> • `tests` or `demo` $\rightarrow$ runs the live scenario test suite.  
+> • See [Quick Commands & Agent Skills](#quick-commands--agent-skills) for full details.
 
 ---
 
@@ -248,9 +271,21 @@ docker build -t unified-document-viewer:latest .
 
 ## Running the Application
 
-### Method 1: Full-Stack Docker Compose (Recommended)
+### Method 1: Automatic Zero-Config Startup (Recommended)
 
-This starts the complete environment: PostgreSQL, Mock Sales API, Mock Service API, Mock IdP, and the Spring Boot application container.
+Simply run the startup script. It **automatically checks all required ports**, detects if ports are occupied by existing services (PostgreSQL `5432`, `8080`, `8081`, `8082`, `8088`), dynamically allocates available ports, starts the Docker containers, builds and launches Spring Boot, and verifies `UP` health:
+
+```bash
+./scripts/start-app.sh
+```
+
+No manual port configuration or `.env` editing is required!
+
+---
+
+### Method 2: Full-Stack Docker Compose
+
+This starts the complete environment using Docker Compose:
 
 ```bash
 # 1. Start all containers including the application
@@ -712,12 +747,16 @@ Any new developer or AI assistant can immediately interact with the repository u
 
 | Natural Language Request | Action Performed | CLI Equivalent |
 |---|---|---|
-| **`Start app`** / `startup` | Starts Docker infrastructure (PostgreSQL, mock Sales/Service APIs, mock IdP), builds the project, launches Spring Boot, and verifies `UP` health. | `docker compose up -d && mvn spring-boot:run` |
-| **`api docs`** / `api-docs` | Displays the OpenAPI 3 schema and lists all endpoints, query parameters, headers, and responses. | `curl -s http://localhost:8080/v3/api-docs` |
+| **`Start app`** / `startup` | Automatically detects available ports, starts Docker services (PostgreSQL, stubs, IdP), builds & launches Spring Boot, and verifies `UP` health. | `./scripts/start-app.sh` |
+| **`api docs`** / `api-docs` | Displays the OpenAPI 3 schema and lists all endpoints, query parameters, headers, and responses. | `./scripts/test-runner.sh api-docs` |
 | **`tests`** / `test cases` / `demo` | Lists all test scenarios and executes the full automated demonstration suite. | `./scripts/test-runner.sh demo` |
 | **`run test <scenario>`** | Executes a specific live test scenario against the running service. | `./scripts/test-runner.sh <scenario>` |
+| **`check ports`** / `ports` | Diagnoses whether any required ports (5432, 8080, 8081, 8082, 8088) are occupied. | `./scripts/test-runner.sh check-ports` |
+| **`clean ports`** / `kill ports` | Safely terminates lingering processes on test ports. | `./scripts/test-runner.sh clean-ports` |
 
 ### Available Test Scenarios:
+- `./scripts/test-runner.sh check-ports`: Diagnoses occupied ports and lists process names/PIDs.
+- `./scripts/test-runner.sh clean-ports`: Terminates lingering processes on test ports.
 - `./scripts/test-runner.sh happy-path`: Queries VIN `1HGBH41JXMN109186`, verifies `200 OK` and merged document list.
 - `./scripts/test-runner.sh cache-hit`: Verifies instant `<37ms` response from PostgreSQL cache.
 - `./scripts/test-runner.sh partial-failure`: Shuts down Service stub, verifies `206 Partial Content` fault isolation, and restores the stub.

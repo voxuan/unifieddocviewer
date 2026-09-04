@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: docuser
       POSTGRES_PASSWORD: docpassword
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./stubs/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
@@ -29,7 +29,7 @@ services:
     image: wiremock/wiremock:latest
     container_name: docviewer-idp-mock
     ports:
-      - "8088:8080"
+      - "${IDP_PORT:-8088}:8080"
     volumes:
       - ./stubs/idp-mock/mappings:/home/wiremock/mappings:ro
       - ./stubs/idp-mock/__files:/home/wiremock/__files:ro
@@ -43,7 +43,7 @@ services:
     image: wiremock/wiremock:latest
     container_name: docviewer-sales-stub
     ports:
-      - "8081:8080"
+      - "${SALES_PORT:-8081}:8080"
     volumes:
       - ./stubs/sales-system/mappings:/home/wiremock/mappings:ro
       - ./stubs/sales-system/__files:/home/wiremock/__files:ro
@@ -57,7 +57,7 @@ services:
     image: wiremock/wiremock:latest
     container_name: docviewer-service-stub
     ports:
-      - "8082:8080"
+      - "${SERVICE_PORT:-8082}:8080"
     volumes:
       - ./stubs/service-system/mappings:/home/wiremock/mappings:ro
       - ./stubs/service-system/__files:/home/wiremock/__files:ro
@@ -73,7 +73,7 @@ services:
       dockerfile: Dockerfile
     container_name: docviewer-app
     ports:
-      - "8080:8080"
+      - "${APP_PORT:-${PORT:-8080}}:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       DB_HOST: postgres

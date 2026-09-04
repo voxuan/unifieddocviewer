@@ -3,7 +3,7 @@ name: docviewer
 description: >-
   Operational runbook, lifecycle commands, and test scenario suite for the Unified Document Viewer microservice.
   Use when the user asks to:
-  - "Start app" or launch the application environment
+  - "start app" or launch the application environment
   - "api docs" or "api-docs" to view the generated OpenAPI 3 specification
   - "tests", "test cases", or "demo" to list available test scenarios
   - "run test <scenario>" to execute specific live test scenarios (happy-path, cache-hit, partial-failure, total-outage, security-401, validation-400)
@@ -15,40 +15,21 @@ This skill provides step-by-step operational workflows and execution procedures 
 
 ---
 
-## Command 1: Start App ("Start app" / "startup")
+## Command 1: Start App ("start app" / "startup")
 
-**Objective**: Ensure all backing containers (PostgreSQL, mock Sales API, mock Service API, mock IdP) and the Spring Boot application are built, running, and healthy.
+**Objective**: Automatically resolve port conflicts, start all backing containers (PostgreSQL, mock Sales API, mock Service API, mock IdP), build and start Spring Boot, and verify readiness with zero configuration.
 
 ### Execution Procedure:
-1. **Start Backing Infrastructure**:
-   ```bash
-   docker compose up -d postgres sales-stub service-stub idp-mock
-   ```
-2. **Verify Container Health**:
-   ```bash
-   docker compose ps
-   ```
-   Confirm all 4 containers (`docviewer-postgres`, `docviewer-sales-stub`, `docviewer-service-stub`, `docviewer-idp-mock`) are `Up` and `healthy`.
+Run the automatic zero-config startup script:
+```bash
+./scripts/start-app.sh
+```
 
-3. **Check Port Availability**:
-   Check if port 8080 or 8085 is available:
-   ```bash
-   lsof -i :8080 || lsof -i :8085
-   ```
-   If port 8080 is occupied by another process, start Spring Boot on port 8085 using `-Dserver.port=8085`.
-
-4. **Build & Launch Spring Boot Application**:
-   ```bash
-   # In background/daemon mode:
-   java -Dserver.port=8080 -jar target/unifieddocviewer-0.0.1-SNAPSHOT.jar || java -Dserver.port=8085 -jar target/unifieddocviewer-0.0.1-SNAPSHOT.jar
-   ```
-
-5. **Verify Readiness**:
-   Poll the Actuator health endpoint until status is `UP`:
-   ```bash
-   curl -s http://localhost:8080/actuator/health || curl -s http://localhost:8085/actuator/health
-   ```
-   Expected response: `{"status":"UP", ...}`.
+This automatically:
+1. Detects occupied ports on the host machine and dynamically allocates free ports (e.g. `8080` $\rightarrow$ `8085`/`8086`, `5432` $\rightarrow$ `5433`).
+2. Starts Docker containers mapped to the available ports.
+3. Builds the JAR (if needed) and launches Spring Boot.
+4. Polls `/actuator/health` until status is `UP` and prints the active URLs.
 
 ---
 
@@ -59,10 +40,10 @@ This skill provides step-by-step operational workflows and execution procedures 
 ### Execution Procedure:
 1. **Fetch Raw OpenAPI 3 JSON Schema**:
    ```bash
-   curl -s http://localhost:8080/v3/api-docs || curl -s http://localhost:8085/v3/api-docs
+   ./scripts/test-runner.sh api-docs
    ```
 2. **Interactive Swagger UI**:
-   Open browser at: `http://localhost:8080/swagger-ui.html` (or `http://localhost:8085/swagger-ui.html`).
+   Open browser at: `http://localhost:<APP_PORT>/swagger-ui.html` (e.g. `http://localhost:8080/swagger-ui.html` or `http://localhost:8086/swagger-ui.html`).
 
 ### API Summary:
 - **`GET /api/v1/documents`**: Aggregates vehicle documents across registered dealership systems.
@@ -96,57 +77,88 @@ This skill provides step-by-step operational workflows and execution procedures 
 
 ## Command 4: Run Test Scenario ("run test <scenario>")
 
-Execute the specified test scenario against the active service:
+Execute the specified test scenario against the active service (using the port-safe test runner script):
 
 ### 1. `run test happy-path`
 ```bash
-# 1. Acquire Bearer token
-export JWT_TOKEN=$(curl -s -X POST http://localhost:8088/token -d "grant_type=client_credentials&client_id=operator-app&scope=openid" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
-
-# 2. Execute Happy Path Search
-curl -i -s -X GET "http://localhost:8080/api/v1/documents?vin=1HGBH41JXMN109186" -H "Authorization: Bearer $JWT_TOKEN"
+./scripts/test-runner.sh happy-path
+```
+*Manual cURL equivalent:*
+```bash
+PORT=${PORT:-8080}
+JWT_TOKEN=$(curl -s -X POST http://localhost:8088/token -d "grant_type=client_credentials&client_id=operator-app&scope=openid" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+curl -i -s -X GET "http://localhost:${PORT}/api/v1/documents?vin=1HGBH41JXMN109186" -H "Authorization: Bearer $JWT_TOKEN"
 # Verify: 200 OK, totalCount: 2, partialFailure: false
 ```
 
 ### 2. `run test cache-hit`
 ```bash
-time curl -i -s -X GET "http://localhost:8080/api/v1/documents?vin=1HGBH41JXMN109186" -H "Authorization: Bearer $JWT_TOKEN"
-# Verify: 200 OK, response time < 37ms, check logs for "Cache hit"
+./scripts/test-runner.sh cache-hit
+```
+*Manual cURL equivalent:*
+```bash
+PORT=${PORT:-8080}
+JWT_TOKEN=$(curl -s -X POST http://localhost:8088/token -d "grant_type=client_credentials&client_id=operator-app&scope=openid" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+time curl -i -s -X GET "http://localhost:${PORT}/api/v1/documents?vin=1HGBH41JXMN109186" -H "Authorization: Bearer $JWT_TOKEN"
+# Verify: 200 OK, response time < 37ms
 ```
 
 ### 3. `run test partial-failure`
 ```bash
-# 1. Stop Service System container
+./scripts/test-runner.sh partial-failure
+```
+*Manual cURL equivalent:*
+```bash
 docker compose stop service-stub
-
-# 2. Execute search
-curl -i -s -X GET "http://localhost:8080/api/v1/documents?vin=1HGBH41JXMN109222" -H "Authorization: Bearer $JWT_TOKEN"
+PORT=${PORT:-8080}
+JWT_TOKEN=$(curl -s -X POST http://localhost:8088/token -d "grant_type=client_credentials&client_id=operator-app&scope=openid" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+curl -i -s -X GET "http://localhost:${PORT}/api/v1/documents?vin=1HGBH41JXMN109222" -H "Authorization: Bearer $JWT_TOKEN"
 # Verify: 206 Partial Content, partialFailure: true, SALES: OK, SERVICE: ERROR
-
-# 3. Restore Service System container
 docker compose start service-stub
 ```
 
 ### 4. `run test total-outage`
 ```bash
-curl -i -s -X GET "http://localhost:8080/api/v1/documents?vin=1HGBH41JXMN109999" -H "Authorization: Bearer $JWT_TOKEN"
-# Verify: 503 Service Unavailable, partialFailure: true, all sources: ERROR
+./scripts/test-runner.sh total-outage
+```
+*Manual cURL equivalent:*
+```bash
+PORT=${PORT:-8080}
+JWT_TOKEN=$(curl -s -X POST http://localhost:8088/token -d "grant_type=client_credentials&client_id=operator-app&scope=openid" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+curl -i -s -X GET "http://localhost:${PORT}/api/v1/documents?vin=1HGBH41JXMN109999" -H "Authorization: Bearer $JWT_TOKEN"
+# Verify: 503 Service Unavailable, partialFailure: true
 ```
 
 ### 5. `run test security-401`
 ```bash
-curl -i -s -X GET "http://localhost:8080/api/v1/documents?vin=1HGBH41JXMN109186"
+./scripts/test-runner.sh security-401
+```
+*Manual cURL equivalent:*
+```bash
+PORT=${PORT:-8080}
+curl -i -s -X GET "http://localhost:${PORT}/api/v1/documents?vin=1HGBH41JXMN109186"
 # Verify: 401 Unauthorized
 ```
 
 ### 6. `run test validation-400`
 ```bash
-curl -i -s -X GET "http://localhost:8080/api/v1/documents?vin=INVALID_SHORT_VIN" -H "Authorization: Bearer $JWT_TOKEN"
+./scripts/test-runner.sh validation-400
+```
+*Manual cURL equivalent:*
+```bash
+PORT=${PORT:-8080}
+JWT_TOKEN=$(curl -s -X POST http://localhost:8088/token -d "grant_type=client_credentials&client_id=operator-app&scope=openid" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+curl -i -s -X GET "http://localhost:${PORT}/api/v1/documents?vin=INVALID_SHORT_VIN" -H "Authorization: Bearer $JWT_TOKEN"
 # Verify: 400 Bad Request
 ```
 
 ### 7. `run test metrics-check`
 ```bash
-curl -s http://localhost:8080/actuator/prometheus | grep -E "(document_lookup|external_api|cache)"
+./scripts/test-runner.sh metrics-check
+```
+*Manual cURL equivalent:*
+```bash
+PORT=${PORT:-8080}
+curl -s "http://localhost:${PORT}/actuator/prometheus" | grep -E "(document_lookup|external_api|cache)"
 # Verify: Counters and duration histograms are exposed
 ```

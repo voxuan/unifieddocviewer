@@ -79,3 +79,4 @@ jacoco.exec
 
 # Scratch & temporary files
 scratch/
+.env

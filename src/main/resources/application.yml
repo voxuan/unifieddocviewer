@@ -1,5 +1,5 @@
 server:
-  port: ${PORT:8080}
+  port: ${PORT:${APP_PORT:8080}}
   shutdown: graceful
 
 spring:
@@ -32,8 +32,8 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8088/realms/dealership}
-          jwk-set-uri: ${JWKS_URI:http://localhost:8088/realms/dealership/protocol/openid-connect/certs}
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:${IDP_PORT:8088}/realms/dealership}
+          jwk-set-uri: ${JWKS_URI:http://localhost:${IDP_PORT:8088}/realms/dealership/protocol/openid-connect/certs}
 
 # External Systems Configuration (Open/Closed Architecture)
 external-systems:
@@ -43,18 +43,18 @@ external-systems:
     sales:
       enabled: true
       source-name: SALES
-      base-url: ${SALES_API_URL:http://localhost:8081}
+      base-url: ${SALES_API_URL:http://localhost:${SALES_PORT:8081}}
       timeout-ms: 3000
-      token-uri: ${IDP_TOKEN_URL:http://localhost:8088/token}
+      token-uri: ${IDP_TOKEN_URL:http://localhost:${IDP_PORT:8088}/token}
       client-id: unified-viewer-svc
       client-secret: ${SALES_CLIENT_SECRET:sales-secret-key}
       scope: sales:documents:read
     service:
       enabled: true
       source-name: SERVICE
-      base-url: ${SERVICE_API_URL:http://localhost:8082}
+      base-url: ${SERVICE_API_URL:http://localhost:${SERVICE_PORT:8082}}
       timeout-ms: 3000
-      token-uri: ${IDP_TOKEN_URL:http://localhost:8088/token}
+      token-uri: ${IDP_TOKEN_URL:http://localhost:${IDP_PORT:8088}/token}
       client-id: unified-viewer-svc
       client-secret: ${SERVICE_CLIENT_SECRET:service-secret-key}
       scope: service:documents:read
