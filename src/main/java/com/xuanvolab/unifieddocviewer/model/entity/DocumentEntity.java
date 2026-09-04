@@ -46,7 +46,14 @@ public class DocumentEntity {
     @Column(name = "metadata", columnDefinition = "TEXT")
     private String metadata;
 
-    @CreationTimestamp
-    @Column(name = "fetched_at", nullable = false, updatable = false)
+    @Column(name = "fetched_at", nullable = false)
     private Instant fetchedAt;
+
+    @PrePersist
+    @PreUpdate
+    public void onSave() {
+        if (this.fetchedAt == null) {
+            this.fetchedAt = Instant.now();
+        }
+    }
 }

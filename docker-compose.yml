@@ -97,8 +97,6 @@ services:
         condition: service_started
     networks:
       - docviewer-net
-    profiles:
-      - full-stack
 
 volumes:
   postgres_data:

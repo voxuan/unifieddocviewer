@@ -47,12 +47,11 @@ RESOLVED_IDP_PORT=$(find_free_port 8088 "docviewer-idp-mock")
 RESOLVED_SALES_PORT=$(find_free_port 8081 "docviewer-sales-stub")
 RESOLVED_SERVICE_PORT=$(find_free_port 8082 "docviewer-service-stub")
 
-# If port 8080 is in use, find next available port (e.g. 8085, 8086...)
-if is_port_in_use 8080 && ! (curl -s -m 1 "http://localhost:8080/actuator/health" 2>/dev/null | grep -q '"status":"UP"'); then
-    RESOLVED_APP_PORT=$(find_free_port 8085)
-else
-    RESOLVED_APP_PORT=8080
-fi
+# Resolve App Port, ensuring no conflict with assigned stubs
+RESOLVED_APP_PORT=8080
+while is_port_in_use "$RESOLVED_APP_PORT" || [ "$RESOLVED_APP_PORT" = "$RESOLVED_IDP_PORT" ] || [ "$RESOLVED_APP_PORT" = "$RESOLVED_SALES_PORT" ] || [ "$RESOLVED_APP_PORT" = "$RESOLVED_SERVICE_PORT" ]; do
+    RESOLVED_APP_PORT=$((RESOLVED_APP_PORT + 1))
+done
 
 # 2. Persist resolved ports to .env for all subsequent commands
 cat <<EOF > .env
@@ -72,67 +71,44 @@ echo "    • Sales Stub    : ${RESOLVED_SALES_PORT}"
 echo "    • Service Stub  : ${RESOLVED_SERVICE_PORT}"
 echo "    • IdP Mock      : ${RESOLVED_IDP_PORT}"
 
-# 3. Start Docker Infrastructure
-echo "[2/4] Starting Docker backing services (PostgreSQL, Stubs, IdP)..."
-docker compose up -d postgres sales-stub service-stub idp-mock
+# 3. Stop any host-level Java app process if lingering
+if is_port_in_use "${RESOLVED_APP_PORT}"; then
+    echo " -> Freeing port ${RESOLVED_APP_PORT} from local process..."
+    lsof -ti ":${RESOLVED_APP_PORT}" | xargs kill -9 2>/dev/null || true
+fi
 
-# Wait briefly for database to be healthy
-echo " -> Waiting for database readiness..."
-for i in {1..15}; do
-    if docker exec docviewer-postgres pg_isready -U docuser -d docviewer >/dev/null 2>&1; then
+# 4. Build fresh JAR if needed
+if [ ! -f "target/unifieddocviewer-0.0.1-SNAPSHOT.jar" ]; then
+    echo "[2/3] Building JAR with Maven..."
+    mvn clean package -DskipTests
+fi
+
+# 5. Start Entire Stack in Docker (PostgreSQL, Stubs, IdP, and App Container)
+echo "[2/3] Building and starting all Docker services (App, PostgreSQL, Stubs, IdP)..."
+docker compose up -d --build
+
+# 5. Wait for App Health Check
+echo "[3/3] Waiting for Unified Document Viewer container to become healthy on port ${RESOLVED_APP_PORT}..."
+READY=false
+for i in {1..40}; do
+    if curl -s -m 1 "http://localhost:${RESOLVED_APP_PORT}/actuator/health" 2>/dev/null | grep -q '"status":"UP"'; then
+        READY=true
         break
     fi
     sleep 1
 done
 
-# 4. Build if JAR does not exist
-if [ ! -f "target/unifieddocviewer-0.0.1-SNAPSHOT.jar" ]; then
-    echo "[3/4] Building JAR with Maven..."
-    mvn clean package -DskipTests
+if [ "$READY" = true ]; then
+    echo " -> Container docviewer-app is UP and healthy!"
 else
-    echo "[3/4] Executable JAR found: target/unifieddocviewer-0.0.1-SNAPSHOT.jar"
-fi
-
-# 5. Launch Spring Boot Application (if not already running on target port)
-echo "[4/4] Starting Unified Document Viewer on port ${RESOLVED_APP_PORT}..."
-
-if curl -s -m 1 "http://localhost:${RESOLVED_APP_PORT}/actuator/health" | grep -q '"status":"UP"'; then
-    echo " -> Application is already running and UP on port ${RESOLVED_APP_PORT}."
-else
-    # Launch in background
-    nohup java -Dserver.port="${RESOLVED_APP_PORT}" \
-         -Dspring.datasource.url="jdbc:postgresql://localhost:${RESOLVED_DB_PORT}/docviewer" \
-         -Dexternal-systems.systems.sales.base-url="http://localhost:${RESOLVED_SALES_PORT}" \
-         -Dexternal-systems.systems.sales.token-uri="http://localhost:${RESOLVED_IDP_PORT}/token" \
-         -Dexternal-systems.systems.service.base-url="http://localhost:${RESOLVED_SERVICE_PORT}" \
-         -Dexternal-systems.systems.service.token-uri="http://localhost:${RESOLVED_IDP_PORT}/token" \
-         -Dspring.security.oauth2.resourceserver.jwt.issuer-uri="http://localhost:${RESOLVED_IDP_PORT}/realms/dealership" \
-         -Dspring.security.oauth2.resourceserver.jwt.jwk-set-uri="http://localhost:${RESOLVED_IDP_PORT}/realms/dealership/protocol/openid-connect/certs" \
-         -jar target/unifieddocviewer-0.0.1-SNAPSHOT.jar > app.log 2>&1 &
-    
-    APP_PID=$!
-    echo " -> Launched Spring Boot PID ${APP_PID}. Waiting for health check..."
-
-    # Poll Actuator health endpoint
-    READY=false
-    for i in {1..30}; do
-        if curl -s -m 1 "http://localhost:${RESOLVED_APP_PORT}/actuator/health" 2>/dev/null | grep -q '"status":"UP"'; then
-            READY=true
-            break
-        fi
-        sleep 1
-    done
-
-    if [ "$READY" = true ]; then
-        echo " -> Application started successfully!"
-    else
-        echo " -> Application startup timed out. Check app.log for details."
-        exit 1
-    fi
+    echo " -> Application startup timed out. Container logs:"
+    docker logs docviewer-app --tail 30 || true
+    exit 1
 fi
 
 echo "========================================================================"
-echo " ✅ Application is READY to use!"
+echo " ✅ Application is RUNNING IN DOCKER and ready to use!"
+echo " • Container   : docviewer-app"
 echo " • Swagger UI  : http://localhost:${RESOLVED_APP_PORT}/swagger-ui.html"
 echo " • API Docs    : http://localhost:${RESOLVED_APP_PORT}/v3/api-docs"
 echo " • Health      : http://localhost:${RESOLVED_APP_PORT}/actuator/health"

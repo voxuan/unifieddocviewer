@@ -9,12 +9,15 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface DocumentRepository extends JpaRepository<DocumentEntity, Long> {
 
     @Query("SELECT d FROM DocumentEntity d WHERE d.vin = :vin AND d.fetchedAt > :threshold ORDER BY d.createdAt DESC")
     List<DocumentEntity> findValidCachedDocuments(@Param("vin") String vin, @Param("threshold") Instant threshold);
+
+    Optional<DocumentEntity> findBySourceSystemAndDocumentId(String sourceSystem, String documentId);
 
     @Modifying
     @Query("DELETE FROM DocumentEntity d WHERE d.fetchedAt < :threshold")

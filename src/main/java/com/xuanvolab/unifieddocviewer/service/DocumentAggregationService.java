@@ -215,30 +215,37 @@ public class DocumentAggregationService {
 
     private void saveDocumentsToDatabase(String vin, List<DocumentDto> documents) {
         try {
-            List<DocumentEntity> entities = documents.stream()
-                    .map(dto -> {
-                        String metadataJson = null;
-                        if (dto.getMetadata() != null) {
-                            try {
-                                metadataJson = objectMapper.writeValueAsString(dto.getMetadata());
-                            } catch (JsonProcessingException ignored) {}
-                        }
+            Instant now = Instant.now();
+            List<DocumentEntity> entities = new ArrayList<>();
 
-                        return DocumentEntity.builder()
-                                .vin(vin)
+            for (DocumentDto dto : documents) {
+                String metadataJson = null;
+                if (dto.getMetadata() != null) {
+                    try {
+                        metadataJson = objectMapper.writeValueAsString(dto.getMetadata());
+                    } catch (JsonProcessingException ignored) {}
+                }
+
+                DocumentEntity entity = documentRepository
+                        .findBySourceSystemAndDocumentId(dto.getSourceSystem(), dto.getDocumentId())
+                        .orElseGet(() -> DocumentEntity.builder()
                                 .sourceSystem(dto.getSourceSystem())
                                 .documentId(dto.getDocumentId())
-                                .documentType(dto.getDocumentType())
-                                .title(dto.getTitle())
-                                .createdAt(dto.getCreatedAt())
-                                .documentUrl(dto.getDocumentUrl())
-                                .metadata(metadataJson)
-                                .build();
-                    })
-                    .toList();
+                                .build());
+
+                entity.setVin(vin);
+                entity.setDocumentType(dto.getDocumentType());
+                entity.setTitle(dto.getTitle());
+                entity.setCreatedAt(dto.getCreatedAt());
+                entity.setDocumentUrl(dto.getDocumentUrl());
+                entity.setMetadata(metadataJson);
+                entity.setFetchedAt(now);
+
+                entities.add(entity);
+            }
 
             documentRepository.saveAll(entities);
-            log.debug("Persisted {} aggregated documents to database for VIN: {}", entities.size(), vin);
+            log.debug("Persisted/Updated {} aggregated documents in cache for VIN: {}", entities.size(), vin);
         } catch (Exception ex) {
             log.warn("Could not persist aggregated documents to cache database: {}", ex.getMessage());
         }
